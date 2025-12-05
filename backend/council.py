@@ -1,4 +1,4 @@
-"""3-stage LLM Council orchestration."""
+"""3-stage S+ Lab LLM Council orchestration."""
 
 from typing import List, Dict, Any, Tuple
 from .openrouter import query_models_parallel, query_model
@@ -139,7 +139,7 @@ async def stage3_synthesize_final(
         for result in stage2_results
     ])
 
-    chairman_prompt = f"""You are the Chairman of an LLM Council. Multiple AI models have provided responses to a user's question, and then ranked each other's responses.
+    chairman_prompt = f"""You are the Chairman of an S+ Lab LLM Council. Multiple AI models have provided responses to a user's question, and then ranked each other's responses.
 
 Original Question: {user_query}
 
@@ -274,8 +274,8 @@ Title:"""
 
     messages = [{"role": "user", "content": title_prompt}]
 
-    # Use gemini-2.5-flash for title generation (fast and cheap)
-    response = await query_model("google/gemini-2.5-flash", messages, timeout=30.0)
+    # Use a lightweight model for title generation
+    response = await query_model("openai/gpt-oss-20b:free", messages, timeout=30.0)
 
     if response is None:
         # Fallback to a generic title

@@ -96,3 +96,13 @@ body {
   border-left: 4px solid #ddd;
   color: #666;
 }
+
+/* Math styling */
+.markdown-content .katex {
+  font-size: 1em;
+}
+
+.markdown-content .katex-display {
+  margin: 12px 0;
+  text-align: center;
+}

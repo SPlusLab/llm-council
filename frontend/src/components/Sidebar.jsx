@@ -1,16 +1,22 @@
 import { useState, useEffect } from 'react';
 import './Sidebar.css';
 
+import TrashIcon from './TrashIcon';
+
 export default function Sidebar({
   conversations,
   currentConversationId,
   onSelectConversation,
   onNewConversation,
+  onDeleteConversation,
 }) {
   return (
     <div className="sidebar">
       <div className="sidebar-header">
-        <h1>LLM Council</h1>
+        <div className="logo-container">
+          <img src="/logo.png" alt="S+ Lab Logo" className="logo" />
+          <h1>S+ Lab LLM Council</h1>
+        </div>
         <button className="new-conversation-btn" onClick={onNewConversation}>
           + New Conversation
         </button>
@@ -26,14 +32,28 @@ export default function Sidebar({
               className={`conversation-item ${
                 conv.id === currentConversationId ? 'active' : ''
               }`}
-              onClick={() => onSelectConversation(conv.id)}
             >
-              <div className="conversation-title">
-                {conv.title || 'New Conversation'}
+              <div
+                className="conversation-main"
+                onClick={() => onSelectConversation(conv.id)}
+              >
+                <div className="conversation-title">
+                  {conv.title || 'New Conversation'}
+                </div>
+                <div className="conversation-meta">
+                  {conv.message_count} messages
+                </div>
               </div>
-              <div className="conversation-meta">
-                {conv.message_count} messages
-              </div>
+              <button
+                className="delete-conversation-btn"
+                title="Delete conversation"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteConversation && onDeleteConversation(conv.id);
+                }}
+              >
+                <TrashIcon size={16} />
+              </button>
             </div>
           ))
         )}

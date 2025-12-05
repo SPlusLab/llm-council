@@ -1,1 +1,1 @@
-"""LLM Council backend package."""
+"""S+ Lab LLM Council backend package."""

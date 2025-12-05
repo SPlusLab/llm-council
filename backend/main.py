@@ -1,4 +1,4 @@
-"""FastAPI backend for LLM Council."""
+"""FastAPI backend for S+ Lab LLM Council."""
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,14 +7,18 @@ from pydantic import BaseModel
 from typing import List, Dict, Any
 import uuid
 import json
+
+# DELETE conversation endpoint
+# Place DELETE endpoint after app is defined
 import asyncio
 
 from . import storage
 from .council import run_full_council, generate_conversation_title, stage1_collect_responses, stage2_collect_rankings, stage3_synthesize_final, calculate_aggregate_rankings
 
-app = FastAPI(title="LLM Council API")
 
-# Enable CORS for local development
+app = FastAPI(title="S+ Lab LLM Council API")
+
+# Enable CORS for local development (must be after app is defined)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:3000"],
@@ -53,7 +57,7 @@ class Conversation(BaseModel):
 @app.get("/")
 async def root():
     """Health check endpoint."""
-    return {"status": "ok", "service": "LLM Council API"}
+    return {"status": "ok", "service": "S+ Lab LLM Council API"}
 
 
 @app.get("/api/conversations", response_model=List[ConversationMetadata])
@@ -77,6 +81,15 @@ async def get_conversation(conversation_id: str):
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return conversation
+
+
+@app.delete("/api/conversations/{conversation_id}")
+async def delete_conversation(conversation_id: str):
+    """Delete a conversation."""
+    deleted = storage.delete_conversation(conversation_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return {"status": "deleted"}
 
 
 @app.post("/api/conversations/{conversation_id}/message")

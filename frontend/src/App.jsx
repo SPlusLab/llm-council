@@ -181,6 +181,20 @@ function App() {
     }
   };
 
+  const handleDeleteConversation = async (id) => {
+    if (!window.confirm('Delete this conversation? This cannot be undone.')) return;
+    try {
+      await api.deleteConversation(id);
+      setConversations((prev) => prev.filter((c) => c.id !== id));
+      if (currentConversationId === id) {
+        setCurrentConversationId(null);
+        setCurrentConversation(null);
+      }
+    } catch (error) {
+      alert('Failed to delete conversation.');
+    }
+  };
+
   return (
     <div className="app">
       <Sidebar
@@ -188,6 +202,7 @@ function App() {
         currentConversationId={currentConversationId}
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
+        onDeleteConversation={handleDeleteConversation}
       />
       <ChatInterface
         conversation={currentConversation}

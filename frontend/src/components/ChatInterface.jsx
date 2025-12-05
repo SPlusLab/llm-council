@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import Stage1 from './Stage1';
 import Stage2 from './Stage2';
 import Stage3 from './Stage3';
@@ -41,7 +44,7 @@ export default function ChatInterface({
     return (
       <div className="chat-interface">
         <div className="empty-state">
-          <h2>Welcome to LLM Council</h2>
+          <h2>Welcome to S+ Lab LLM Council</h2>
           <p>Create a new conversation to get started</p>
         </div>
       </div>
@@ -54,7 +57,7 @@ export default function ChatInterface({
         {conversation.messages.length === 0 ? (
           <div className="empty-state">
             <h2>Start a conversation</h2>
-            <p>Ask a question to consult the LLM Council</p>
+            <p>Ask a question to consult the S+ Lab LLM Council</p>
           </div>
         ) : (
           conversation.messages.map((msg, index) => (
@@ -64,13 +67,18 @@ export default function ChatInterface({
                   <div className="message-label">You</div>
                   <div className="message-content">
                     <div className="markdown-content">
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkMath]}
+                        rehypePlugins={[rehypeKatex]}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
                     </div>
                   </div>
                 </div>
               ) : (
                 <div className="assistant-message">
-                  <div className="message-label">LLM Council</div>
+                  <div className="message-label">S+ Lab LLM Council</div>
 
                   {/* Stage 1 */}
                   {msg.loading?.stage1 && (
