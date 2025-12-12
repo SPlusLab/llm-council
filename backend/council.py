@@ -4,21 +4,38 @@ from typing import List, Dict, Any, Tuple
 from .openrouter import query_models_parallel, query_model
 from .config import COUNCIL_MODELS, CHAIRMAN_MODEL
 
+FORMAT_GUIDANCE = (
+    "Respond in clean Markdown. Use fenced code blocks for code and LaTeX for "
+    "math (inline with $...$ or block with $$...$$). Keep outputs concise and readable."
+)
 
-async def stage1_collect_responses(user_query: str) -> List[Dict[str, Any]]:
+CASE_STUDY_SYSTEM = (
+    "You are part of an editorial council writing book-ready case studies. Obey the supplied style card, "
+    "section order, and sensitivities from the brief. Never invent facts—mark gaps as [TODO] and flag questionable claims "
+    "as [CHECK]. Mode rules: draft -> write a full case study; edit -> refine the provided draft without changing facts; "
+    "fact_check -> highlight issues and provide a corrected version only when confident. Use clear section headers and keep voice consistent."
+)
+
+
+async def stage1_collect_responses(user_query: str, request=None) -> List[Dict[str, Any]]:
     """
     Stage 1: Collect individual responses from all council models.
 
     Args:
         user_query: The user's question
+        request: FastAPI Request object for disconnect detection
 
     Returns:
         List of dicts with 'model' and 'response' keys
     """
-    messages = [{"role": "user", "content": user_query}]
+    messages = [
+        {"role": "system", "content": FORMAT_GUIDANCE},
+        {"role": "system", "content": CASE_STUDY_SYSTEM},
+        {"role": "user", "content": user_query},
+    ]
 
     # Query all models in parallel
-    responses = await query_models_parallel(COUNCIL_MODELS, messages)
+    responses = await query_models_parallel(COUNCIL_MODELS, messages, request=request)
 
     # Format results
     stage1_results = []
@@ -34,7 +51,8 @@ async def stage1_collect_responses(user_query: str) -> List[Dict[str, Any]]:
 
 async def stage2_collect_rankings(
     user_query: str,
-    stage1_results: List[Dict[str, Any]]
+    stage1_results: List[Dict[str, Any]],
+    request=None
 ) -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
     """
     Stage 2: Each model ranks the anonymized responses.
@@ -42,6 +60,7 @@ async def stage2_collect_rankings(
     Args:
         user_query: The original user query
         stage1_results: Results from Stage 1
+        request: FastAPI Request object for disconnect detection
 
     Returns:
         Tuple of (rankings list, label_to_model mapping)
@@ -61,17 +80,24 @@ async def stage2_collect_rankings(
         for label, result in zip(labels, stage1_results)
     ])
 
-    ranking_prompt = f"""You are evaluating different responses to the following question:
+    ranking_prompt = f"""You are evaluating different council member drafts for a case-study writing task.
 
-Question: {user_query}
+Task brief:
+{user_query}
 
 Here are the responses from different models (anonymized):
 
 {responses_text}
 
+Evaluation focus:
+- Fidelity to the supplied style card and exemplar rhythm.
+- Follows requested section order and length guidance.
+- Fact discipline: no hallucinated names/metrics; gaps marked [TODO] or [CHECK].
+- Mode awareness (draft vs edit vs fact_check) and handling of sensitivities/extras.
+
 Your task:
-1. First, evaluate each response individually. For each response, explain what it does well and what it does poorly.
-2. Then, at the very end of your response, provide a final ranking.
+1. Evaluate each response: what it does well, what is weak or risky (style, structure, factuality).
+2. Then, at the very end, provide a final ranking.
 
 IMPORTANT: Your final ranking MUST be formatted EXACTLY as follows:
 - Start with the line "FINAL RANKING:" (all caps, with colon)
@@ -92,10 +118,14 @@ FINAL RANKING:
 
 Now provide your evaluation and ranking:"""
 
-    messages = [{"role": "user", "content": ranking_prompt}]
+    messages = [
+        {"role": "system", "content": FORMAT_GUIDANCE},
+        {"role": "system", "content": CASE_STUDY_SYSTEM},
+        {"role": "user", "content": ranking_prompt},
+    ]
 
     # Get rankings from all council models in parallel
-    responses = await query_models_parallel(COUNCIL_MODELS, messages)
+    responses = await query_models_parallel(COUNCIL_MODELS, messages, request=request)
 
     # Format results
     stage2_results = []
@@ -115,7 +145,8 @@ Now provide your evaluation and ranking:"""
 async def stage3_synthesize_final(
     user_query: str,
     stage1_results: List[Dict[str, Any]],
-    stage2_results: List[Dict[str, Any]]
+    stage2_results: List[Dict[str, Any]],
+    request=None
 ) -> Dict[str, Any]:
     """
     Stage 3: Chairman synthesizes final response.
@@ -124,6 +155,7 @@ async def stage3_synthesize_final(
         user_query: The original user query
         stage1_results: Individual model responses from Stage 1
         stage2_results: Rankings from Stage 2
+        request: FastAPI Request object for disconnect detection
 
     Returns:
         Dict with 'model' and 'response' keys
@@ -139,9 +171,9 @@ async def stage3_synthesize_final(
         for result in stage2_results
     ])
 
-    chairman_prompt = f"""You are the Chairman of an LLM Council. Multiple AI models have provided responses to a user's question, and then ranked each other's responses.
+    chairman_prompt = f"""You are the Chairman of an LLM Council. Multiple AI models have provided responses to a user's task, and then ranked each other's responses.
 
-Original Question: {user_query}
+Task brief: {user_query}
 
 STAGE 1 - Individual Responses:
 {stage1_text}
@@ -149,17 +181,28 @@ STAGE 1 - Individual Responses:
 STAGE 2 - Peer Rankings:
 {stage2_text}
 
-Your task as Chairman is to synthesize all of this information into a single, comprehensive, accurate answer to the user's original question. Consider:
+Your task as Chairman is to synthesize all of this information into a single, comprehensive, accurate answer to the user's original task. Consider:
 - The individual responses and their insights
 - The peer rankings and what they reveal about response quality
 - Any patterns of agreement or disagreement
 
+Final output requirements:
+- Honor the style card and exemplar rhythm in the brief.
+- Keep section headers and order from the brief; mark gaps as [TODO] and dubious claims as [CHECK].
+- Respect mode (draft vs edit vs fact_check) and any sensitivities/anonymization rules.
+- Include requested extras (e.g., title options, pull quotes, TL;DR) after the main sections.
+- Avoid inventing names, dates, or metrics.
+
 Provide a clear, well-reasoned final answer that represents the council's collective wisdom:"""
 
-    messages = [{"role": "user", "content": chairman_prompt}]
+    messages = [
+        {"role": "system", "content": FORMAT_GUIDANCE},
+        {"role": "system", "content": CASE_STUDY_SYSTEM},
+        {"role": "user", "content": chairman_prompt},
+    ]
 
     # Query the chairman model
-    response = await query_model(CHAIRMAN_MODEL, messages)
+    response = await query_model(CHAIRMAN_MODEL, messages, request=request)
 
     if response is None:
         # Fallback if chairman fails

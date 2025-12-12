@@ -8,7 +8,8 @@ from .config import OPENROUTER_API_KEY, OPENROUTER_API_URL
 async def query_model(
     model: str,
     messages: List[Dict[str, str]],
-    timeout: float = 120.0
+    timeout: float = 120.0,
+    request: Optional[Any] = None
 ) -> Optional[Dict[str, Any]]:
     """
     Query a single model via OpenRouter API.
@@ -17,6 +18,7 @@ async def query_model(
         model: OpenRouter model identifier (e.g., "openai/gpt-4o")
         messages: List of message dicts with 'role' and 'content'
         timeout: Request timeout in seconds
+        request: FastAPI Request object for disconnect detection
 
     Returns:
         Response dict with 'content' and optional 'reasoning_details', or None if failed
@@ -32,6 +34,11 @@ async def query_model(
     }
 
     try:
+        # Check if client disconnected before making request
+        if request and await request.is_disconnected():
+            print(f"Client disconnected, skipping OpenRouter call for {model}")
+            return None
+
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(
                 OPENROUTER_API_URL,
@@ -55,7 +62,8 @@ async def query_model(
 
 async def query_models_parallel(
     models: List[str],
-    messages: List[Dict[str, str]]
+    messages: List[Dict[str, str]],
+    request: Optional[Any] = None
 ) -> Dict[str, Optional[Dict[str, Any]]]:
     """
     Query multiple models in parallel.
@@ -63,6 +71,7 @@ async def query_models_parallel(
     Args:
         models: List of OpenRouter model identifiers
         messages: List of message dicts to send to each model
+        request: FastAPI Request object for disconnect detection
 
     Returns:
         Dict mapping model identifier to response dict (or None if failed)
@@ -70,10 +79,18 @@ async def query_models_parallel(
     import asyncio
 
     # Create tasks for all models
-    tasks = [query_model(model, messages) for model in models]
+    tasks = [query_model(model, messages, request=request) for model in models]
 
     # Wait for all to complete
-    responses = await asyncio.gather(*tasks)
+    responses = await asyncio.gather(*tasks, return_exceptions=True)
 
-    # Map models to their responses
-    return {model: response for model, response in zip(models, responses)}
+    # Map models to their responses (handle exceptions)
+    result = {}
+    for model, response in zip(models, responses):
+        if isinstance(response, Exception):
+            print(f"Exception for model {model}: {response}")
+            result[model] = None
+        else:
+            result[model] = response
+    
+    return result
